@@ -130,10 +130,11 @@ static float result_delay = 0.1f;
 #define ECS_DATA_LEN 23
 static char *edns_client_ip = NULL;
 static ecs_list_t ecs_list;
+static int has_chn;
 static int resolve_ecs_addrs();
 static void add_ecs_data(char *buf, struct in_addr *addr, uint8_t mask);
 
-static int check_result(char *buf, size_t buflen);
+static int check_result(struct sockaddr *dst_addr, char *buf, size_t buflen);
 
 static int local_sock;
 static int remote_sock;
@@ -497,8 +498,8 @@ static int dns_init_sockets() {
   return 0;
 }
 
-static void send_request(id_addr_t id_addr, ecs_addr_t ecs, ssize_t len) {
-  add_ecs_data(global_buf + len, &ecs.addrs, 32);
+static void send_request(id_addr_t id_addr, struct in_addr ecs_addr, ssize_t len) {
+  add_ecs_data(global_buf + len, &ecs_addr, 32);
 
   if (-1 == sendto(remote_sock, global_buf, len + ECS_DATA_LEN, 0,
                    id_addr.addr, id_addr.addrlen))
@@ -527,7 +528,9 @@ static void dns_handle_local() {
     if (verbose) {
       question_hostname = hostname_from_question(msg);
       if (question_hostname)
-        LOG("query %s\n", question_hostname);
+        LOG("query %s from %s:%d\n", question_hostname,
+            inet_ntoa(((struct sockaddr_in *)src_addr)->sin_addr),
+            htons(((struct sockaddr_in *)src_addr)->sin_port));
     }
     // assign a new id
     uint16_t new_id;
@@ -553,10 +556,13 @@ static void dns_handle_local() {
         len -= 11;
     } else
       (*(global_buf + 11))++;
-
+	
     for (j = 0; j < dns_servers_len; j++) {
+    	if(!has_chn) {
+    	  send_request(dns_server_addrs[j],((struct sockaddr_in *)src_addr)->sin_addr, len);
+    	}
 	    for (i = 0; i < ecs_list.entries; i++)
-	      send_request(dns_server_addrs[j],ecs_list.ecs_addrs[i], len);
+	      send_request(dns_server_addrs[j],ecs_list.ecs_addrs[i].addrs, len);
     }
   } else {
     ERR("recvfrom");
@@ -588,9 +594,10 @@ static void dns_handle_remote() {
 	          inet_ntoa(((struct sockaddr_in *)src_addr)->sin_addr),
 	          htons(((struct sockaddr_in *)src_addr)->sin_port));
     }
-    is_chn = check_result(global_buf, len);
     id_addr_t *id_addr = queue_lookup(query_id);
     if (id_addr) {
+      is_chn = check_result(id_addr->addr,global_buf, len);
+
       id_addr->addr->sa_family = AF_INET;
       uint16_t ns_old_id = htons(id_addr->old_id);
       memcpy(global_buf, &ns_old_id, 2);
@@ -784,7 +791,8 @@ static void free_delay(int pos) {
 static int resolve_ecs_addrs() {
   char* token;
   char *pch = strchr(edns_client_ip, ',');
-  int i = 0, has_chn = 0, has_foreign = 0;
+  int i = 0, has_foreign = 0;
+  has_chn = 0;
   ecs_list.entries = 1;
   while (pch != NULL) {
     ecs_list.entries++;
@@ -804,11 +812,11 @@ static int resolve_ecs_addrs() {
     token = strtok(NULL, ",");
     i++;
   }
-  if (!(has_chn && has_foreign)) {
+/*  if (!(has_chn && has_foreign)) {
     VERR("You should have at least one Chinese Client Subnet and"
          " one foreign Client Subnet\n");
     return 1;
-  }
+  }*/
   return 0;
 }
 
@@ -844,11 +852,16 @@ static void add_ecs_data(char *buf_ptr, struct in_addr *addr, uint8_t mask) {
   memcpy(buf_ptr, addr, addrl);
 }
 
-static int check_result(char *buf, size_t buflen) {
+static int check_result(struct sockaddr *dst_addr, char *buf, size_t buflen) {
   int i;
   size_t addrl = sizeof(struct in_addr);
   struct in_addr *addr = malloc(addrl);
   memcpy(addr, buf + buflen - addrl, addrl);
+
+  if (!has_chn && addr->s_addr == ((struct sockaddr_in *)dst_addr)->sin_addr.s_addr) {
+    free(addr);
+    return test_ip_in_list(((struct sockaddr_in *)dst_addr)->sin_addr,&chnroute_list);
+  }
   for (i = 0; i < ecs_list.entries; i++) {
     if (addr->s_addr == ecs_list.ecs_addrs[i].addrs.s_addr) {
       free(addr);
