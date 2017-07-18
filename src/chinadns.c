@@ -688,7 +688,11 @@ static int should_filter_query(ns_msg msg, struct sockaddr *dns_addr, int is_chn
     }
   }
   if(-1 == is_chn) {
-  	is_chn = 1;
+    if(dns_is_chn) {
+  	  is_chn = 1;
+    } else {
+  	  is_chn = 0;
+    }
   }
   for (rrnum = 0; rrnum < rrmax; rrnum++) {
     if (local_ns_parserr(&msg, ns_s_an, rrnum, &rr)) {
