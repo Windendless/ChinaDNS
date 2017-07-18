@@ -78,7 +78,7 @@ typedef struct {
 static char global_buf[BUF_SIZE];
 static int verbose = 0;
 
-static const char *default_dns_server = "119.29.29.29,8.8.8.8,8.8.4.4";
+static const char *default_dns_server = "223.5.5.5,119.29.29.29,8.8.8.8,8.8.4.4";
 static char *dns_server = NULL;
 static int dns_servers_len;
 static id_addr_t *dns_server_addrs;
@@ -882,7 +882,7 @@ Forward DNS requests.\n\
   -y DELAY_TIME         delay time for foreign result, default: 0.1\n\
   -b BIND_ADDR          address that listens, default: 0.0.0.0\n\
   -p BIND_PORT          port that listens, default: 53\n\
-  -s DNS                DNS server to use, default: 119.29.29.29,8.8.8.8,8.8.4.4\n\
+  -s DNS                DNS server to use, default: 223.5.5.5,119.29.29.29,8.8.8.8,8.8.4.4\n\
   -e ADDRs              set edns-client-subnet\n\
   -v                    verbose logging\n\
   -h                    show this help message and exit\n\
