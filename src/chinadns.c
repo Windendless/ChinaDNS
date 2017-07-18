@@ -715,7 +715,7 @@ static int should_filter_query(ns_msg msg, struct sockaddr *dns_addr, int is_chn
   }
   if (verbose && rrmax > 0)
     printf("Non-IPv4, ");
-  return 0;
+  return dns_is_chn ? 0 : -1;
 }
 
 static void schedule_delay(uint16_t query_id, const char *buf, size_t buflen,
